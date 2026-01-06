@@ -112,44 +112,36 @@ try:
             print("  !! 注意: このページで1件も取れませんでした。")
             break
 
-        # 次ページへ移動ロジック（強化版）
-        next_page_num = page_count + 1
-        moved = False
-        
+        # 次ページへ移動ロジック（ID指定版）
+        # HTML解析結果: id="assignNextPageBtn" が「次へ」ボタンの実体
         try:
-            # 優先1: 数字のリンク（例: "2", "3"）を直接探す
-            # ページ番号そのもののリンクテキストを探します
-            print(f"  [次ページ移動試行] リンク '{next_page_num}' を探しています...")
-            next_page_link = driver.find_element(By.LINK_TEXT, str(next_page_num))
-            
-            if next_page_link.is_displayed():
-                driver.execute_script("arguments[0].click();", next_page_link)
-                print(f"  -> ページ {next_page_num} へ移動しました")
-                sleep(5)
-                page_count += 1
-                moved = True
-            
-        except:
-            # 数字で見つからない場合、従来の「次へ」系ボタンを探す
-            pass
-
-        if not moved:
+            # 2種類のIDの可能性を考慮（念のため両方チェック）
+            next_btn = None
             try:
-                # 優先2: 「次へ」「Next」「>」などのボタンを探す
-                next_buttons = driver.find_elements(By.XPATH, "//a[contains(text(), '次') or contains(text(), 'Next') or contains(text(), '＞') or contains(text(), '>')]")
-                for btn in next_buttons:
-                    if btn.is_displayed() and btn.is_enabled():
-                        print("  -> '次へ'ボタンが見つかりました。クリックします。")
-                        driver.execute_script("arguments[0].click();", btn)
-                        sleep(5)
-                        page_count += 1
-                        moved = True
-                        break
-            except Exception as e:
-                pass
-        
-        if not moved:
-            print("これ以上ページが見つかりません（数字リンクも次へボタンもなし）。収集終了。")
+                next_btn = driver.find_element(By.ID, "assignNextPageBtn")
+            except:
+                try:
+                    next_btn = driver.find_element(By.ID, "allNextPageBtn")
+                except:
+                    pass
+
+            if next_btn and next_btn.is_displayed():
+                # 親要素が disabled クラスを持っていないか確認（終了判定）
+                parent_class = next_btn.find_element(By.XPATH, "./..").get_attribute("class")
+                if "disabled" in str(parent_class):
+                    print("これ以上ページはありません(Disabled)。収集終了。")
+                    break
+                
+                print(f"  [次へ]ボタン(ID:{next_btn.get_attribute('id')})をクリックします")
+                driver.execute_script("arguments[0].click();", next_btn)
+                sleep(8) # 読み込み待ち（長めに確保）
+                page_count += 1
+            else:
+                print("これ以上ページが見つかりません（ボタンなし）。収集終了。")
+                break
+                
+        except Exception as e:
+            print(f"ページ移動処理でエラー: {e}")
             break
 
     print(f"\n合計 {len(collected_stations)} 件収集完了")
