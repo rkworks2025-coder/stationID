@@ -104,7 +104,7 @@ try:
                 # 重複防止
                 if not any(d['stationCd'] == station_cd for d in collected_stations):
                     collected_stations.append({
-                        "area": "-", # あとで埋める
+                        "area": "-",
                         "station_name": station_name,
                         "stationCd": station_cd,
                         "detail_url": detail_url
@@ -149,7 +149,7 @@ try:
     print(f"\n合計 {len(collected_stations)} 件の基本情報を取得完了。")
 
     # ------------------------------------------------------
-    # [II-2] 詳細情報の補完（ここを追加）
+    # [II-2] 詳細情報の補完
     # ------------------------------------------------------
     print(f"\n[II-2. 詳細ページからエリア情報を取得中...]")
     print("※1件ずつアクセスするため、完了まで数分かかります。")
@@ -162,35 +162,49 @@ try:
             
             soup = BeautifulSoup(driver.page_source, "html.parser")
             
-            area_text = "-"
+            full_address = "-"
             
-            # 「住所」「所在地」「エリア」「設置場所」という文字を含む項目(th)を探す
+            # 住所等の項目を探す
             target_th = soup.find(lambda tag: tag.name == "th" and re.search(r'(住所|所在地|エリア|設置場所)', tag.get_text()))
             
             if target_th:
-                # その隣のセル(td)を取得
                 target_td = target_th.find_next_sibling("td")
                 if target_td:
-                    area_text = target_td.get_text(strip=True)
+                    full_address = target_td.get_text(strip=True)
             
-            # 見つからなかった場合のバックアップ（都道府県名を探す）
-            if area_text == "-":
+            # バックアップ：都道府県名を探す
+            if full_address == "-":
                  match = soup.find(string=re.compile(r'(都|道|府|県)'))
-                 if match:
-                     # あまりに長い文章は除外
-                     text = match.strip()
-                     if len(text) < 50:
-                         area_text = text
+                 if match and len(match.strip()) < 50:
+                     full_address = match.strip()
 
-            station['area'] = area_text
-            
-            # 進捗表示（10件ごと）
+            # -------------------------------------------
+            # 【ここが修正点】住所の整形処理 (〇〇市まで)
+            # -------------------------------------------
+            if full_address != "-":
+                # 1. 都道府県（東京都、北海道、京都府、大阪府、xx県）を削除
+                address_no_pref = re.sub(r'^(東京都|北海道|京都府|大阪府|.{2,3}県)', '', full_address)
+                
+                # 2. 最初の「市」「区」「町」「村」までを抽出
+                # 例: 横浜市西区 -> 横浜市
+                # 例: 新宿区西新宿 -> 新宿区
+                match_city = re.search(r'^(.+?[市区町村])', address_no_pref)
+                
+                if match_city:
+                    station['area'] = match_city.group(1)
+                else:
+                    # マッチしない場合（海外や特殊な表記）はそのまま入れる
+                    station['area'] = address_no_pref
+            else:
+                station['area'] = "-"
+            # -------------------------------------------
+
+            # 進捗表示
             if (i + 1) % 10 == 0:
                 print(f"  ... {i + 1}/{len(collected_stations)} 件完了")
             
         except Exception as e:
             print(f"  [{i+1}] 詳細取得エラー: {e}")
-            # エラーでも止まらず次へ進む
 
     # ------------------------------------------------------
     # [III] スプレッドシートへ保存
@@ -205,7 +219,6 @@ try:
             ws = sh.add_worksheet(title=SHEET_TAB_NAME, rows=len(collected_stations)+10, cols=5)
 
         df_new = pd.DataFrame(collected_stations)
-        # 不要なURL列は削除して保存
         df_new = df_new[['area', 'station_name', 'stationCd']]
         
         ws.clear()
