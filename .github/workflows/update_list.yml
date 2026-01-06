@@ -1,0 +1,29 @@
+name: Update Station List
+
+on:
+  repository_dispatch:
+    types: [update_list_trigger]
+
+jobs:
+  update-list:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas gspread selenium webdriver-manager beautifulsoup4 lxml requests
+
+      - name: Create Service Account JSON
+        run: |
+          echo '${{ secrets.GCP_SA_KEY }}' > service_account.json
+
+      - name: Run Update Script
+        run: python update_station_list.py
