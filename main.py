@@ -11,6 +11,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from bs4 import BeautifulSoup
 import re
+import urllib.parse
 
 # ==========================================================
 # 1. 設定・ログイン情報
@@ -76,7 +77,7 @@ try:
         print("既にログイン済み、またはページが異なります。")
 
     # ------------------------------------------------------
-    # [II] リスト収集処理
+    # [II] リスト収集処理（まずはURLを集める）
     # ------------------------------------------------------
     print("\n[II. リスト収集開始]")
     driver.get(LIST_URL)
@@ -97,12 +98,16 @@ try:
                 match = re.search(r'stationCd=([0-9a-zA-Z]+)', href)
                 station_cd = match.group(1) if match else "Unknown"
                 
+                # 詳細ページへの絶対URLを作成
+                detail_url = urllib.parse.urljoin(driver.current_url, href)
+
                 # 重複防止
                 if not any(d['stationCd'] == station_cd for d in collected_stations):
                     collected_stations.append({
-                        "area": "-",
+                        "area": "-", # あとで埋める
                         "station_name": station_name,
-                        "stationCd": station_cd
+                        "stationCd": station_cd,
+                        "detail_url": detail_url
                     })
                     current_page_found += 1
 
@@ -112,10 +117,8 @@ try:
             print("  !! 注意: このページで1件も取れませんでした。")
             break
 
-        # 次ページへ移動ロジック（ID指定版）
-        # HTML解析結果: id="assignNextPageBtn" が「次へ」ボタンの実体
+        # 次ページへ移動ロジック
         try:
-            # 2種類のIDの可能性を考慮（念のため両方チェック）
             next_btn = None
             try:
                 next_btn = driver.find_element(By.ID, "assignNextPageBtn")
@@ -126,25 +129,68 @@ try:
                     pass
 
             if next_btn and next_btn.is_displayed():
-                # 親要素が disabled クラスを持っていないか確認（終了判定）
                 parent_class = next_btn.find_element(By.XPATH, "./..").get_attribute("class")
                 if "disabled" in str(parent_class):
-                    print("これ以上ページはありません(Disabled)。収集終了。")
+                    print("これ以上ページはありません(Disabled)。")
                     break
                 
-                print(f"  [次へ]ボタン(ID:{next_btn.get_attribute('id')})をクリックします")
+                print(f"  [次へ]ボタンをクリックします")
                 driver.execute_script("arguments[0].click();", next_btn)
-                sleep(8) # 読み込み待ち（長めに確保）
+                sleep(5)
                 page_count += 1
             else:
-                print("これ以上ページが見つかりません（ボタンなし）。収集終了。")
+                print("これ以上ページが見つかりません。")
                 break
                 
         except Exception as e:
             print(f"ページ移動処理でエラー: {e}")
             break
 
-    print(f"\n合計 {len(collected_stations)} 件収集完了")
+    print(f"\n合計 {len(collected_stations)} 件の基本情報を取得完了。")
+
+    # ------------------------------------------------------
+    # [II-2] 詳細情報の補完（ここを追加）
+    # ------------------------------------------------------
+    print(f"\n[II-2. 詳細ページからエリア情報を取得中...]")
+    print("※1件ずつアクセスするため、完了まで数分かかります。")
+    
+    for i, station in enumerate(collected_stations):
+        try:
+            target_url = station['detail_url']
+            driver.get(target_url)
+            sleep(1) # サーバー負荷軽減と読み込み待ち
+            
+            soup = BeautifulSoup(driver.page_source, "html.parser")
+            
+            area_text = "-"
+            
+            # 「住所」「所在地」「エリア」「設置場所」という文字を含む項目(th)を探す
+            target_th = soup.find(lambda tag: tag.name == "th" and re.search(r'(住所|所在地|エリア|設置場所)', tag.get_text()))
+            
+            if target_th:
+                # その隣のセル(td)を取得
+                target_td = target_th.find_next_sibling("td")
+                if target_td:
+                    area_text = target_td.get_text(strip=True)
+            
+            # 見つからなかった場合のバックアップ（都道府県名を探す）
+            if area_text == "-":
+                 match = soup.find(string=re.compile(r'(都|道|府|県)'))
+                 if match:
+                     # あまりに長い文章は除外
+                     text = match.strip()
+                     if len(text) < 50:
+                         area_text = text
+
+            station['area'] = area_text
+            
+            # 進捗表示（10件ごと）
+            if (i + 1) % 10 == 0:
+                print(f"  ... {i + 1}/{len(collected_stations)} 件完了")
+            
+        except Exception as e:
+            print(f"  [{i+1}] 詳細取得エラー: {e}")
+            # エラーでも止まらず次へ進む
 
     # ------------------------------------------------------
     # [III] スプレッドシートへ保存
@@ -159,6 +205,7 @@ try:
             ws = sh.add_worksheet(title=SHEET_TAB_NAME, rows=len(collected_stations)+10, cols=5)
 
         df_new = pd.DataFrame(collected_stations)
+        # 不要なURL列は削除して保存
         df_new = df_new[['area', 'station_name', 'stationCd']]
         
         ws.clear()
