@@ -22,7 +22,7 @@ LIST_URL = "https://dailycheck.tc-extsys.jp/tcrappsweb/web/routineStation.html"
 # ユーザー情報
 USER_ID_1 = "0030"
 USER_ID_2 = "927583"
-PASSWORD = "Ccj-222223"
+PASSWORD = "Ccj-322222"
 
 # 出力先スプレッドシート
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1ge_99NgSbNKQnrrHDMM1wL9n5J2g2mc-xFeMcILCOzo/edit?gid=0#gid=0"
