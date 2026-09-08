@@ -20,9 +20,9 @@ LOGIN_URL = "https://dailycheck.tc-extsys.jp/tcrappsweb/web/login/tawLogin.html"
 LIST_URL = "https://dailycheck.tc-extsys.jp/tcrappsweb/web/routineStation.html"
 
 # ユーザー情報
-USER_ID_1 = "0030"
-USER_ID_2 = "REDACTED"
-PASSWORD = "REDACTED"
+USER_ID_1 = os.environ.get("TMA_ID_1", "0030")
+USER_ID_2 = os.environ.get("TMA_ID_2", "")
+PASSWORD = os.environ.get("TMA_PW_MODE2", "")
 
 # 出力先スプレッドシート
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1ge_99NgSbNKQnrrHDMM1wL9n5J2g2mc-xFeMcILCOzo/edit?gid=0#gid=0"

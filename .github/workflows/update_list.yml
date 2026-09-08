@@ -26,4 +26,8 @@ jobs:
           echo '${{ secrets.GCP_SA_KEY }}' > service_account.json
 
       - name: Run Update Script
+        env:
+          TMA_ID_1: ${{ secrets.TMA_ID_1 }}
+          TMA_ID_2: ${{ secrets.TMA_ID_2 }}
+          TMA_PW_MODE2: ${{ secrets.TMA_PW_MODE2 }}
         run: python main.py
